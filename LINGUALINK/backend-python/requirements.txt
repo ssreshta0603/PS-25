@@ -1,0 +1,6 @@
+Flask
+celery[redis]
+redis
+torch
+transformers
+sentencepiece

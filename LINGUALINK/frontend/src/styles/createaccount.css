@@ -1,0 +1,73 @@
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: Arial;
+  height: 100%;
+}
+
+/* Background */
+.login-page {
+  height: 100vh;
+  background: linear-gradient(45deg, #86b0bd 50%, #1fbeef);
+  background-image: "url('/assets/bgm.png')";
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Title */
+.title {
+  font-size: 60px;
+  font-weight: bold;
+  color: rgb(1, 73, 118);
+  margin-bottom: 40px;
+}
+
+/* Card */
+.login-box {
+  width: 400px;
+  padding: 30px;
+  /* background: lightblue; */
+  border-radius: 20px;
+  /* box-shadow: 0px 0px 20px rgba(0,0,0,0.3); */
+  text-align: center;
+  background-color :rgba(165, 198, 207, 0.6);
+  box-shadow: 0px 0px 20px rgba(155, 178, 181, 0.3);
+}
+
+/* Inputs */
+.input {
+  width: 100%;
+  padding: 12px 20px;
+  margin-bottom: 15px;
+  border-radius: 20px;
+  border:none;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+/* Button */
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 20px;
+  background: rgb(37, 184, 234);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+/* Link */
+.create-link {
+  color: #5e2b94;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
