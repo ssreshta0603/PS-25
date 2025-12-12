@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import "../styles/Dashboard.css";
-import { useNavigate, Outlet, Link } from "react-router-dom";
+import { useNavigate, Outlet } from "react-router-dom";
 import axios from "axios";
+import { io } from "socket.io-client";
 
 // Google translating function
-// Translate message using NLLB backend (through Node API)
 const translateMessage = async (text, fromLang, toLang) => {
   try {
     const response = await fetch("http://localhost:5000/api/translate", {
@@ -13,7 +13,7 @@ const translateMessage = async (text, fromLang, toLang) => {
       body: JSON.stringify({
         text,
         from: fromLang || "en",
-        to: toLang || "en"
+        to: toLang || "en",
       }),
     });
 
@@ -25,29 +25,41 @@ const translateMessage = async (text, fromLang, toLang) => {
   }
 };
 
-
 export default function Dashboard() {
   const [activeChat, setActiveChat] = useState(null);
   const [activeFriend, setActiveFriend] = useState(null);
   const [messageInput, setMessageInput] = useState("");
 
-  const [chats, setChats] = useState([]); // FULL CHAT LIST
-  const [messages, setMessages] = useState([]); // ACTIVE CHAT MESSAGES
+  const [chats, setChats] = useState([]);
+  const [messages, setMessages] = useState([]);
 
   const [searchResults, setSearchResults] = useState([]);
   const [me, setMe] = useState("");
-  const [friends, setFriends] = useState([]);
-  const [friendRequests, setFriendRequests] = useState([]);
+  const [friends, setFriends] = useState([]);          // IDs only
+  const [friendRequests, setFriendRequests] = useState([]); // FULL user objects
   const [searchUser, setSearchUser] = useState("");
-const [friendList,setFriendList] = useState([]);
+  const [friendList, setFriendList] = useState([]);
+
+  const [showRequests, setShowRequests] = useState(false); // for dropdown
+
   const navigate = useNavigate();
   const chatEndRef = useRef(null);
+  const socketRef = useRef(null);
+  const activeFriendRef = useRef(activeFriend);
+
+  // derived IDs for helper functions
+  const friendRequestIds = friendRequests.map((u) => u._id);
 
   // Auto-scroll
   useEffect(() => {
     if (chatEndRef.current)
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Keep ref in sync with activeFriend
+  useEffect(() => {
+    activeFriendRef.current = activeFriend;
+  }, [activeFriend]);
 
   // Fetch self profile
   useEffect(() => {
@@ -58,6 +70,7 @@ const [friendList,setFriendList] = useState([]);
           headers: { Authorization: `Bearer ${token}` },
         });
         setMe(res.data);
+
         await axios.put(
           "http://localhost:5000/api/users/online",
           { online: true },
@@ -70,16 +83,53 @@ const [friendList,setFriendList] = useState([]);
     fetchMe();
   }, []);
 
-  // Fetch friends & friend requests
+  // Initialize WebSocket (run ONCE)
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    socketRef.current = io("http://localhost:5000", {
+      auth: { token },
+    });
+
+    console.log("🔌 WebSocket connected.");
+
+    socketRef.current.on("receive-message", (msg) => {
+      console.log("📩 Real-time message received:", msg);
+
+      // use REF instead of activeFriend (no stale closure)
+      if (
+        activeFriendRef.current &&
+        msg.sender === activeFriendRef.current._id
+      ) {
+        setMessages((prev) => [...prev, msg]);
+      }
+
+      // Always refresh chat previews
+      fetchChatList();
+    });
+
+    return () => {
+      socketRef.current.disconnect();
+      console.log("🔌 WebSocket disconnected.");
+    };
+  }, []); // <-- EMPTY ARRAY (important!)
+
+  // Fetch friends list
   const fetchFriends = async () => {
     const token = localStorage.getItem("token");
     try {
       const res = await axios.get("http://localhost:5000/api/friends/list", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setFriendList(res.data.friends);
-      setFriends(res.data.friends.map((f) => f._id));
-      setFriendRequests(res.data.friendRequests.map((f) => f._id));
+
+      // full objects
+      setFriendList(res.data.friends || []);
+
+      // IDs only
+      setFriends((res.data.friends || []).map((f) => f._id));
+
+      // FULL objects for dropdown
+      setFriendRequests(res.data.friendRequests || []);
     } catch (err) {
       console.log(err);
     }
@@ -88,7 +138,7 @@ const [friendList,setFriendList] = useState([]);
     fetchFriends();
   }, []);
 
-  // Fetch Chats List
+  // Fetch chats list
   const fetchChatList = async () => {
     const token = localStorage.getItem("token");
 
@@ -125,9 +175,7 @@ const [friendList,setFriendList] = useState([]);
     fetchUsers();
   }, [searchUser]);
 
-  // ---------------------------
-  // OPEN CHAT WITH FRIEND
-  // ---------------------------
+  // OPEN CHAT
   const openChat = async (friendId, friendName, friendAvatar, friendLang) => {
     const token = localStorage.getItem("token");
 
@@ -152,15 +200,17 @@ const [friendList,setFriendList] = useState([]);
     }
   };
 
-  // ---------------------------
   // SEND MESSAGE
-  // ---------------------------
   const sendMessage = async () => {
     if (!messageInput || !activeFriend) return;
 
     const token = localStorage.getItem("token");
-    const translated = await translateMessage(messageInput, me.language, activeFriend.language);
-    console.log(translated);
+    const translated = await translateMessage(
+      messageInput,
+      me.language,
+      activeFriend.language
+    );
+
     try {
       const res = await axios.post(
         `http://localhost:5000/api/chats/with/${activeFriend._id}`,
@@ -176,12 +226,19 @@ const [friendList,setFriendList] = useState([]);
       setMessages((prev) => [...prev, res.data]);
       setMessageInput("");
 
-      fetchChatList(); // update chat preview
+      // EMIT real-time message to server
+      socketRef.current.emit("send-message", {
+        to: activeFriend._id,
+        message: res.data,
+      });
+
+      fetchChatList();
     } catch (err) {
       console.log("Message send error:", err);
     }
   };
 
+  // Friend request functions
   const sendFriendRequest = async (receiverId) => {
     const token = localStorage.getItem("token");
     try {
@@ -192,7 +249,6 @@ const [friendList,setFriendList] = useState([]);
       );
       fetchFriends();
     } catch (err) {
-      console.error(err);
       alert(err.response?.data?.error || "Error sending request");
     }
   };
@@ -205,10 +261,9 @@ const [friendList,setFriendList] = useState([]);
         { requesterId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      fetchFriends();
-      fetchChatList();
+      await fetchFriends();
+      await fetchChatList();
     } catch (err) {
-      console.error(err);
       alert(err.response?.data?.error || "Error accepting request");
     }
   };
@@ -221,12 +276,10 @@ const [friendList,setFriendList] = useState([]);
         { requesterId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      fetchFriends();        
-    fetchChatList();
-      
+      await fetchFriends();
+      await fetchChatList();
     } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.error || "Error accepting request");
+      alert(err.response?.data?.error || "Error rejecting request");
     }
   };
 
@@ -234,7 +287,7 @@ const [friendList,setFriendList] = useState([]);
     if (friends.includes(userId))
       return <button disabled style={{ marginLeft: "auto" }}>Friends</button>;
 
-    if (friendRequests.includes(userId))
+    if (friendRequestIds.includes(userId))
       return (
         <button
           style={{ marginLeft: "auto" }}
@@ -243,7 +296,8 @@ const [friendList,setFriendList] = useState([]);
           Accept
         </button>
       );
-      return (
+
+    return (
       <button
         style={{ marginLeft: "auto" }}
         onClick={() => sendFriendRequest(userId)}
@@ -254,45 +308,39 @@ const [friendList,setFriendList] = useState([]);
   };
 
   const getRejectButton = (userId) => {
-  if (friendRequests.includes(userId))
-    return (
-      <button
-        style={{ marginLeft: "10px" }}
-        onClick={() => rejectFriendRequest(userId)}
-      >
-        Reject
-      </button>
-    );
-
-  return null;
-};
-
-// log out.
-const handleLogout = async () => {
-  try {
-    const token = localStorage.getItem("token");
-    if (token) {
-      await axios.put(
-        "http://localhost:5000/api/users/online",
-        { online: false },
-        { headers: { Authorization: `Bearer ${token}` } }
+    if (friendRequestIds.includes(userId))
+      return (
+        <button
+          style={{ marginLeft: "10px" }}
+          onClick={() => rejectFriendRequest(userId)}
+        >
+          Reject
+        </button>
       );
+    return null;
+  };
+
+  // Logout
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        await axios.put(
+          "http://localhost:5000/api/users/online",
+          { online: false },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+    } catch (err) {
+      console.error("Error updating online status:", err);
     }
-  } catch (err) {
-    console.error("Error updating online status:", err);
-  }
 
-  // Clear local storage
-  localStorage.removeItem("token");
-  localStorage.removeItem("userId");
-  localStorage.removeItem("role");
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("role");
 
-  // Redirect to login/home
-  navigate("/");
-};
-    
-
-    
+    navigate("/");
+  };
 
   return (
     <div
@@ -360,55 +408,112 @@ const handleLogout = async () => {
             </li>
           ))}
         </ul>
-        {/* CHAT LIST */}
-        <h3 style={{ marginTop: "10px" ,marginLeft:"10px",color: "rgb(1, 73, 120)" }}>Chats</h3>
-                  
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {chats.map((chat) => (
-              <li
-                key={chat._id}
-                style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}
-                onClick={() =>
-                  openChat(
-                    chat.friend._id,
-                    chat.friend.name,
-                    chat.friend.avatar,
-                    chat.friend.language
-                  )
-                }
-              >
-                <div style={{ position: "relative" }}>
-                  <img
-                    src={chat.friend.avatar}
-                    alt=""
-                    style={{ width: "30px", height: "30px", borderRadius: "50%" }}
-                  />
-                  {/* Online indicator */}
-                  <span
-                    style={{
-                      position: "absolute",
-                      bottom: 0,
-                      right: 0,
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: chat.friend.online ? "green" : "gray",
-                      border: "1px solid white"
-                    }}
-                  />
-                </div>
 
-                <div>
-                  <div>{chat.friend.name}</div>
-                  <small style={{ opacity: 0.7 }}>
-                    {chat.lastMessage ? chat.lastMessage.text : "No messages yet"}
-                  </small>
-                </div>
-              </li>
-            ))}
-          </ul>
+        {/* FRIEND REQUESTS DROPDOWN */}
+        <div className="requests-wrapper">
+          <button
+            className="requests-toggle"
+            onClick={() => setShowRequests((prev) => !prev)}
+          >
+            Requests ({friendRequests.length})
+          </button>
+
+          {showRequests && (
+            <div className="requests-dropdown">
+              {friendRequests.length === 0 ? (
+                <div className="requests-empty">No pending requests</div>
+              ) : (
+                friendRequests.map((u) => (
+                  <div key={u._id} className="request-row">
+                    <img
+                      src={u.avatar}
+                      alt={u.name}
+                      className="request-avatar"
+                    />
+                    <span className="request-name">{u.name}</span>
+                    <button onClick={() => acceptFriendRequest(u._id)}>
+                      Accept
+                    </button>
+                    <button
+                      className="reject-btn"
+                      onClick={() => rejectFriendRequest(u._id)}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* CHAT LIST */}
+        <h3
+          style={{
+            marginTop: "10px",
+            marginLeft: "10px",
+            color: "rgb(1, 73, 120)",
+          }}
+        >
+          Chats
+        </h3>
+
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {chats.map((chat) => (
+            <li
+              key={chat._id}
+              style={{
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "8px",
+              }}
+              onClick={() =>
+                openChat(
+                  chat.friend._id,
+                  chat.friend.name,
+                  chat.friend.avatar,
+                  chat.friend.language
+                )
+              }
+            >
+              <div style={{ position: "relative" }}>
+                <img
+                  src={chat.friend.avatar}
+                  alt=""
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    borderRadius: "50%",
+                  }}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    right: 0,
+                    width: "10px",
+                    height: "10px",
+                    borderRadius: "50%",
+                    backgroundColor: chat.friend.online ? "green" : "gray",
+                    border: "1px solid white",
+                  }}
+                />
+              </div>
+
+              <div>
+                <div>{chat.friend.name}</div>
+                <small style={{ opacity: 0.7 }}>
+                  {chat.lastMessage ? chat.lastMessage.text : "No messages yet"}
+                </small>
+              </div>
+            </li>
+          ))}
+        </ul>
+
         <div className="logOut">
-         <button onClick={()=>{handleLogout()}}>log out</button>
+          <button onClick={handleLogout}>log out</button>
         </div>
       </div>
 

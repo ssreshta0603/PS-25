@@ -141,3 +141,64 @@
   color: #999;
   flex: 1;
 }
+/* Friend Requests Dropdown Styles */
+.requests-wrapper {
+  margin: 10px 10px 0 10px;
+  position: relative;
+}
+
+.requests-toggle {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: none;
+  background: rgb(1, 73, 120); /* same blue as your heading */
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.requests-dropdown {
+  margin-top: 6px;
+  background: #ffffff;
+  border-radius: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  padding: 4px 0;
+}
+
+.requests-empty {
+  padding: 8px;
+  font-size: 14px;
+  color: #555;
+}
+
+.request-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.request-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.request-name {
+  flex: 1;
+}
+
+.request-row button {
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reject-btn {
+  margin-left: 4px;
+  background: #ffdddd;
+}

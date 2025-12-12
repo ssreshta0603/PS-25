@@ -3,6 +3,7 @@ import UsersTab from "./UsersTab";
 import ChatsTab from "./ChatsTab";
 import LogsTab from "./LogsTab";
 import AdminHome from "./AdminHome"; // NEW: overall stats
+import BulkEmail from "./BulkEmail";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -44,6 +45,9 @@ export default function AdminDashboard() {
           <button onClick={() => setTab("users")} style={navButtonStyle(tab === "users")}>User Management</button>
           <button onClick={() => setTab("chat")} style={navButtonStyle(tab === "chat")}>Chat Monitoring</button>
           <button onClick={() => setTab("logs")} style={navButtonStyle(tab === "logs")}>Logs & Analytics</button>
+          <button onClick={() => setTab("bulkemail")} style={navButtonStyle(tab === "bulkemail")}>
+  Bulk Email
+</button>
         </nav>
       </aside>
 
@@ -53,6 +57,7 @@ export default function AdminDashboard() {
         {tab === "users" && <UsersTab />}
         {tab === "chat" && <ChatsTab />}
         {tab === "logs" && <LogsTab />}
+        {tab === "bulkemail" && <BulkEmail />}
       </main>
 
     </div>

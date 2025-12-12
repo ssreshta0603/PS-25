@@ -20,13 +20,28 @@ export default function Login() {
       name: user,
       password: password
     });
-
     const { token, userId } = response.data;
+    const res = await axios.get("http://localhost:5000/api/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const me = res.data;
+    
+  // Store minimal info for profile
+      const userToStore = {
+        name: me.name,
+        email: me.gmail,         
+        avatar: me.avatar || "",
+        bio: me.bio || "",
+        lang: me.language ||"en",
+        id: userId
+      };
+
+      
 
     // Save token + userId
     localStorage.setItem("token", token);
     localStorage.setItem("userId", userId);
-
+    localStorage.setItem("me", JSON.stringify(userToStore));
     // STEP 2: Check if user is admin
     try {
       const verify = await axios.get("http://localhost:5000/api/admin/verify", {
@@ -91,4 +106,3 @@ export default function Login() {
     </div>
   );
 }
-

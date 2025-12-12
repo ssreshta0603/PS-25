@@ -1,8 +1,7 @@
-// routes/chat.js
 import express from "express";
 import Chat from "../models/Chat.js";
-import User from "../models/User.js";       // adjust path if needed
-import { checkAuth } from "./auth.js";  // adjust path if needed
+import User from "../models/User.js";
+import { checkAuth } from "./auth.js";
 
 const router = express.Router();
 
@@ -26,15 +25,15 @@ const findOrCreateChat = async (userId, otherUserId) => {
 
 /**
  * GET /api/chats
- * List all chats for logged-in user (with last message + friend info)
+ * List all chats for logged-in user
  */
 router.get("/", checkAuth, async (req, res) => {
   try {
-    const userId = req.userId; // FIXED
-    
-    const chats = await Chat.find({ users: userId }) // FIXED
-      .populate("users", "name avatar language online"); // get friend info
-    
+    const userId = req.userId;
+
+    const chats = await Chat.find({ users: userId })
+      .populate("users", "name avatar language online");
+
     const formatted = chats.map((chat) => {
       const friend = chat.users.find(
         (u) => u._id.toString() !== userId.toString()
@@ -48,7 +47,7 @@ router.get("/", checkAuth, async (req, res) => {
       return {
         _id: chat._id,
         friend: friend
-          ? { _id: friend._id, name: friend.name, avatar: friend.avatar, language:friend.language, online:friend.online }
+          ? { _id: friend._id, name: friend.name, avatar: friend.avatar, language: friend.language, online: friend.online }
           : null,
         lastMessage,
       };
@@ -61,11 +60,8 @@ router.get("/", checkAuth, async (req, res) => {
   }
 });
 
-
 /**
- * GET /api/chats/with/:userId
- * Get full chat (all messages) with another user.
- * If no chat exists, it will be created (empty messages).
+ * GET full chat with another user
  */
 router.get("/with/:userId", checkAuth, async (req, res) => {
   try {
@@ -81,10 +77,10 @@ router.get("/with/:userId", checkAuth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // const chat = await findOrCreateChat(me, otherUserId);
     let chat = await Chat.findOne({
-    users: { $all: [me, otherUserId], $size: 2 }
-  });
+      users: { $all: [me, otherUserId], $size: 2 }
+    });
+
     res.json({
       _id: chat._id,
       users: chat.users,
@@ -98,9 +94,7 @@ router.get("/with/:userId", checkAuth, async (req, res) => {
 });
 
 /**
- * POST /api/chats/with/:userId
- * Send a message to another user.
- * Body: { text, translated }   (translated is optional)
+ * POST Send message
  */
 router.post("/with/:userId", checkAuth, async (req, res) => {
   try {
@@ -118,8 +112,9 @@ router.post("/with/:userId", checkAuth, async (req, res) => {
     }
 
     let chat = await Chat.findOne({
-    users: { $all: [me, otherUserId], $size: 2 }
-  });
+      users: { $all: [me, otherUserId], $size: 2 }
+    });
+
     const newMessage = {
       sender: me,
       text,
@@ -137,5 +132,35 @@ router.post("/with/:userId", checkAuth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+/**
+ * 🔥 Ensure a default chat between Admin and a User
+ */
+export async function ensureAdminChatForUser(userId) {
+  try {
+    const admin = await User.findOne({ role: "admin" });
+
+    if (!admin) {
+      console.log("❌ No admin found. Cannot create default chat.");
+      return;
+    }
+
+    let chat = await Chat.findOne({
+      users: { $all: [userId, admin._id], $size: 2 }
+    });
+
+    if (!chat) {
+      await Chat.create({
+        users: [userId, admin._id],
+        messages: []
+      });
+      console.log("✅ Default admin chat created for user:", userId);
+    } else {
+      console.log("ℹ️ Admin chat already exists for user:", userId);
+    }
+  } catch (err) {
+    console.error("ensureAdminChatForUser Error:", err);
+  }
+}
 
 export { router as default, findOrCreateChat };

@@ -22,26 +22,37 @@ export default function AdminHome() {
     languageCount: {},
   });
 
+  const [onlineUsers, setOnlineUsers] = useState([]);
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem("token");
+
+        // Fetch all stats
         const res = await axios.get("http://localhost:5000/api/admin/stats", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const res1 = await axios.get("http://localhost:5000/api/admin/onlineStats", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        // Calculate online/offline & language count
-        
-        const onlineCount = res.data.users.filter(u=>{if(u.online){return u.online}}).length;
-        const offlineCount = res.data.users.filter(u=>u.name).length-onlineCount;
-        console.log(onlineCount);
+
+        // Extract online users
+        const onlineUserNames = res.data.users
+          .filter(u => u.online)
+          .map(u => u.name);
+
+        // Remove duplicates
+        const uniqueOnlineUsers = [...new Set(onlineUserNames)];
+
+        const onlineCount = uniqueOnlineUsers.length;
+        const offlineCount = res.data.users.length - onlineCount;
+
+        // Language count
         const languageCount = {};
         res.data.users.forEach(u => {
           languageCount[u.language] = (languageCount[u.language] || 0) + 1;
         });
 
+        // Update state
+        setOnlineUsers(uniqueOnlineUsers);
         setStats({
           totalUsers: res.data.users.length,
           usersOverTime: res.data.usersOverTime,
@@ -53,6 +64,7 @@ export default function AdminHome() {
         console.error("Error fetching stats:", err);
       }
     };
+
     fetchStats();
   }, []);
 
@@ -63,7 +75,14 @@ export default function AdminHome() {
       {
         label: "Languages",
         data: Object.values(stats.languageCount),
-        backgroundColor: ["#4caf50", "#f44336", "#2196f3", "#ff9800", "#9c27b0", "#00bcd4"],
+        backgroundColor: [
+          "#4caf50",
+          "#f44336",
+          "#2196f3",
+          "#ff9800",
+          "#9c27b0",
+          "#00bcd4",
+        ],
       },
     ],
   };
@@ -99,6 +118,15 @@ export default function AdminHome() {
           <h3>Online vs Offline</h3>
           <div style={{ maxWidth: "400px" }}>
             <Bar data={onlineData} />
+          </div>
+
+          <div>
+            <h3>Online Users:</h3>
+            {onlineUsers.length === 0 ? (
+              <p>No users online</p>
+            ) : (
+              onlineUsers.map(u => <p key={u}>{u}</p>)
+            )}
           </div>
         </div>
       </div>

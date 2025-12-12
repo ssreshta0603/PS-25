@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
     type: String, 
     default: "https://tse2.mm.bing.net/th/id/OIP.-GDCqlIp43WC_CIn1brrFAHaHa?pid=Api&P=0&h=180" 
   },
+  bio: { type: String, default: "" },
   language: { type: String, default: "en" },
   friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
